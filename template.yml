@@ -1,0 +1,589 @@
+RestApi Unique Id:  MyStackRestApiF457079E
+BasePathMapping Unique Id:  MyStackDomainNameMapv1MyStackRestApiF457079E21D056A5
+Resources:
+  RestApi0C43BF4B:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Body:
+        openapi: 3.0.0
+        info:
+          title: Two Hands REST API
+          version: 1.0.0
+        servers:
+          - url: https://api.example.com/v1
+        tags:
+          - name: choc
+            description: Access to Chain of custody backend resources
+          - name: ledger
+            description: Access to Blockchain network
+          - name: tally
+            description: APIs for external Tally system to interact with TH system
+          - name: zoho
+            description: APIs for external Zoho system to interact with TH system
+          - name: proxy
+            description: Proxy APIs
+          - name: webhook
+            description: Webhook APIs
+        x-amazon-apigateway-request-validators:
+          params-only:
+            validateRequestBody: false
+            validateRequestParameters: true
+        x-amazon-apigateway-api-key-source: HEADER
+        x-amazon-apigateway-request-validator: params-only
+        paths:
+          "/choc/case/details/{id}":
+            get:
+              summary: Returns information about case
+              tags:
+                - choc
+              parameters:
+                - in: path
+                  name: id
+                  schema:
+                    type: string
+                  required: true
+                  description: Case Id
+              security:
+                - sigv4: []
+              x-amazon-apigateway-auth:
+                type: AWS_IAM
+              x-amazon-apigateway-integration:
+                httpMethod: GET
+                type: http
+                requestParameters:
+                  integration.request.path.id: method.request.path.id
+                responses:
+                  default:
+                    statusCode: "200"
+                  .*401.*:
+                    statusCode: "401"
+                  .*404.*:
+                    statusCode: "404"
+                  .*50.*:
+                    statusCode: "500"
+                uri: https://api.example.com/prod/contents/details/{id}
+              responses:
+                "200":
+                  $ref: "#/components/responses/Success"
+                "401":
+                  $ref: "#/components/responses/Unauthorized"
+                "404":
+                  $ref: "#/components/responses/NotFound"
+                "500":
+                  $ref: "#/components/responses/InternalError"
+          "/ledger/transaction/{id}":
+            get:
+              summary: Returns events for given Tag Id
+              tags:
+                - ledger
+              parameters:
+                - in: path
+                  name: id
+                  schema:
+                    type: string
+                  required: true
+                  description: Tag id to get data for
+              security:
+                - apiKeyAuth: []
+              x-amazon-apigateway-integration:
+                httpMethod: GET
+                type: http
+                requestParameters:
+                  integration.request.path.id: method.request.path.id
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+                  .*403.*:
+                    statusCode: "403"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+                  .*50.*:
+                    statusCode: "500"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+                uri:
+                  Fn::Join:
+                    - ""
+                    - - Fn::ImportValue: uat-twohands-cdk-ledger-app-api-url
+                      - transactions/{id}
+              responses:
+                "200":
+                  description: Returns transactions for given Tag Id
+                  headers:
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/LedgerData"
+                "403":
+                  description: Forbidden
+                  headers:
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/Forbidden"
+                "500":
+                  description: Internal Server Error
+                  headers:
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/InternalError"
+          /thisfish/event:
+            post:
+              security:
+                - apiKeyAuth: []
+              summary: Submits events to Two Hands System
+              tags:
+                - tally
+                - webhook
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: http
+                uri:
+                  Fn::Join:
+                    - ""
+                    - - Fn::ImportValue: uat-twohands-cdk-tally-app-api-url
+                      - thisfish/event
+                responses:
+                  default:
+                    statusCode: "200"
+                  .*204.*:
+                    statusCode: "204"
+                  .*403.*:
+                    statusCode: "403"
+                  .*400.*:
+                    statusCode: "400"
+                  .*411.*:
+                    statusCode: "411"
+                  .*50.*:
+                    statusCode: "500"
+              responses:
+                "200":
+                  $ref: "#/components/responses/Success"
+                "204":
+                  $ref: "#/components/responses/EmptyResponse"
+                "400":
+                  $ref: "#/components/responses/BadRequest"
+                "403":
+                  $ref: "#/components/responses/Forbidden"
+                "411":
+                  $ref: "#/components/responses/NoLength"
+                "500":
+                  $ref: "#/components/responses/InternalError"
+          /inventory/events:
+            post:
+              summary: Submit Zoho inventory event to Two Hands system
+              tags:
+                - zoho
+                - webhook
+              parameters:
+                - in: query
+                  name: type
+                  description: Type of event that needs to be pushed
+                  schema:
+                    type: string
+                  required: true
+                  example: customers
+                - in: query
+                  name: id
+                  description: "unique id of event "
+                  schema:
+                    type: string
+                  required: true
+                  example: "00001"
+              x-amazon-apigateway-integration:
+                httpMethod: PUT
+                type: http
+                requestParameters:
+                  integration.request.path.events: method.request.querystring.type
+                  integration.request.path.id: method.request.querystring.id
+                responses:
+                  default:
+                    statusCode: "200"
+                  .*50.*:
+                    statusCode: "500"
+                uri:
+                  Fn::Join:
+                    - ""
+                    - - Fn::ImportValue: uat-twohands-cdk-zoho-app-api-url
+                      - "{events}/{id}"
+              responses:
+                "200":
+                  description: Event Successfully Submitted
+                "500":
+                  $ref: "#/components/responses/InternalError"
+          "/inventory/{proxy+}":
+            x-amazon-apigateway-any-method:
+              tags:
+                - zoho
+                - proxy
+              parameters:
+                - name: proxy
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              security:
+                - apiKeyAuth: []
+              x-amazon-apigateway-integration:
+                httpMethod: ANY
+                type: http_proxy
+                requestParameters:
+                  integration.request.path.proxy: method.request.path.proxy
+                  integration.request.header.Authorization: "'Zoho-authtoken SECURE_ZOHO_KEY'"
+                  integration.request.querystring.authtoken: "'SECURE_ZOHO_KEY'"
+                  integration.request.querystring.organization_id: "'112'"
+                responses:
+                  default:
+                    statusCode: "200"
+                  .*403.*:
+                    statusCode: "403"
+                  .*50.*:
+                    statusCode: "500"
+                uri: https://inventory.zoho.com/api/v1/{proxy}
+              responses:
+                "200":
+                  description: Success
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                "403":
+                  $ref: "#/components/responses/Forbidden"
+                "500":
+                  $ref: "#/components/responses/InternalError"
+        components:
+          securitySchemes:
+            sigv4:
+              type: apiKey
+              name: Authorization
+              in: header
+              x-amazon-apigateway-authtype: awsSigv4
+            apiKeyAuth:
+              type: apiKey
+              name: x-api-key
+              in: header
+          responses:
+            Success:
+              description: Request was successful
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/Success"
+            EmptyResponse:
+              description: Empty Response is Returned
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/EmptyResponse"
+            Forbidden:
+              description: User does not have enough permission to access resource
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/Forbidden"
+            BadRequest:
+              description: Request does not meet acceptance criteria
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/BadRequest"
+            NoLength:
+              description: Body Length is required
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/NoLength"
+            InternalError:
+              description: Something went wrong when processing request
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/InternalError"
+            Unauthorized:
+              description: User does not have sufficient permissions
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/Unauthorized"
+            NotFound:
+              description: Requested item does not exist
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/NotFound"
+          schemas:
+            Success:
+              type: object
+              properties:
+                message:
+                  type: string
+              example:
+                message: Success
+            EmptyResponse:
+              type: object
+              example: {}
+            Forbidden:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: Forbidden
+            BadRequest:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: Unable to decode payload
+            NoLength:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: Could not save empty records
+            InternalError:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: Failed to save item
+            Unauthorized:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: User does not have sufficient permissions
+            NotFound:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+              example:
+                message: Item does not exist
+            LedgerData:
+              type: object
+      Name: RestApi
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/Resource
+  RestApiDeployment180EC5034bc749f04dd43bf6941faf26a4d30ad1:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId:
+        Ref: RestApi0C43BF4B
+      Description: Automatically created by the RestApi construct
+    DependsOn:
+      - RestApitestGET8B10FED0
+      - RestApitest9059D171
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/Deployment/Resource
+  RestApiDeploymentStageprod3855DE66:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId:
+        Ref: RestApi0C43BF4B
+      DeploymentId:
+        Ref: RestApiDeployment180EC5034bc749f04dd43bf6941faf26a4d30ad1
+      StageName: prod
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/DeploymentStage.prod/Resource
+  RestApiCloudWatchRoleE3ED6605:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/CloudWatchRole/Resource
+  RestApiAccount7C83CF5A:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn:
+        Fn::GetAtt:
+          - RestApiCloudWatchRoleE3ED6605
+          - Arn
+    DependsOn:
+      - RestApi0C43BF4B
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/Account
+  RestApitest9059D171:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+          - RestApi0C43BF4B
+          - RootResourceId
+      PathPart: test
+      RestApiId:
+        Ref: RestApi0C43BF4B
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/Default/test/Resource
+  RestApitestGET8B10FED0:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId:
+        Ref: RestApitest9059D171
+      RestApiId:
+        Ref: RestApi0C43BF4B
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+    Metadata:
+      aws:cdk:path: MyStack/RestApi/Default/test/GET/Resource
+  DomainNameEC95A6E9:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: ap.example.com
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      RegionalCertificateArn: arn:aws:acm:us-east-1:00000000000:certificate/some-id
+    Metadata:
+      aws:cdk:path: MyStack/DomainName/Resource
+  DomainNameMapv1MyStackRestApiF457079EE0023993:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName:
+        Ref: DomainNameEC95A6E9
+      BasePath: v1
+      RestApiId:
+        Ref: RestApi0C43BF4B
+      Stage:
+        Ref: RestApiDeploymentStageprod3855DE66
+    Metadata:
+      aws:cdk:path: MyStack/DomainName/Map:v1=>MyStackRestApiF457079E/Resource
+  CDKMetadata:
+    Type: AWS::CDK::Metadata
+    Properties:
+      Modules: aws-cdk=1.21.0,@aws-cdk/assets=1.21.0,@aws-cdk/aws-apigateway=1.21.0,@aws-cdk/aws-certificatemanager=1.21.0,@aws-cdk/aws-cloudformation=1.21.0,@aws-cdk/aws-cloudwatch=1.21.0,@aws-cdk/aws-ec2=1.21.0,@aws-cdk/aws-events=1.21.0,@aws-cdk/aws-iam=1.21.0,@aws-cdk/aws-kms=1.21.0,@aws-cdk/aws-lambda=1.21.0,@aws-cdk/aws-s3=1.21.0,@aws-cdk/aws-s3-assets=1.21.0,@aws-cdk/aws-sqs=1.21.0,@aws-cdk/aws-ssm=1.21.0,@aws-cdk/core=1.21.0,@aws-cdk/cx-api=1.21.0,@aws-cdk/region-info=1.21.0,jsii-runtime=node.js/v10.5.0
+    Condition: CDKMetadataAvailable
+Outputs:
+  RestApiEndpoint0551178A:
+    Value:
+      Fn::Join:
+        - ""
+        - - https://
+          - Ref: RestApi0C43BF4B
+          - .execute-api.
+          - Ref: AWS::Region
+          - "."
+          - Ref: AWS::URLSuffix
+          - /
+          - Ref: RestApiDeploymentStageprod3855DE66
+          - /
+Conditions:
+  CDKMetadataAvailable:
+    Fn::Or:
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ca-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-northwest-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-central-1
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-3
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - me-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - sa-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-west-2
+
